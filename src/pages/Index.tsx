@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { User } from "@supabase/supabase-js";
 
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
@@ -8,25 +7,24 @@ import TrustSection from "@/components/TrustSection";
 import AboutSection from "@/components/AboutSection";
 import PricingSection from "@/components/PricingSection";
 import PolicyHighlights from "@/components/PolicyHighlights";
-import ContactForm from "@/components/ContactForm";
 import Chatbot from "@/components/Chatbot";
 import Footer from "@/components/Footer";
 import PaymentModal from "@/components/PaymentModal";
 
-interface IndexProps {
-  user: User | null;
-}
+import { useAuth } from "@/lib/auth";
+import type { PlanId } from "@/lib/plans";
 
-const Index = ({ user }: IndexProps) => {
-  const [formOpen, setFormOpen] = useState(false);
-  const [paymentOpen, setPaymentOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState("");
+export default function Index() {
+  const { user, openAuth } = useAuth();
+  const [paymentPlan, setPaymentPlan] = useState<PlanId | null>(null);
 
-  const handleBuy = (plan: string) => {
-    console.log("HANDLE BUY:", plan);
-console.log("paymentOpen:", paymentOpen);
-    setSelectedPlan(plan);
-    setPaymentOpen(true);
+  const handleBuy = (planId: PlanId) => {
+    if (!user) {
+      // Defer the purchase until after the user signs in.
+      openAuth(() => setPaymentPlan(planId));
+      return;
+    }
+    setPaymentPlan(planId);
   };
 
   return (
@@ -36,36 +34,16 @@ console.log("paymentOpen:", paymentOpen);
       <TrustSection />
       <ProcessSection />
       <AboutSection />
-
-      {/* Pricing section triggers Buy */}
       <PricingSection onBuy={handleBuy} />
-
       <PolicyHighlights />
-
-      {/* Optional contact form (if you still want it) */}
-      <ContactForm
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        selectedPlan={selectedPlan}
-      />
-
       <Footer />
       <Chatbot />
 
-      {/* Payment Modal */}
-    {paymentOpen && (
-  <PaymentModal
-    open={paymentOpen}
-    onClose={() => setPaymentOpen(false)}
-    plan={selectedPlan}
-    userEmail={"test@gmail.com"}
-    userName={"Test User"}
-    userId={"123"}
-  />
-)}
-    
+      <PaymentModal
+        open={paymentPlan !== null}
+        onClose={() => setPaymentPlan(null)}
+        planId={paymentPlan}
+      />
     </div>
   );
-};
-
-export default Index;
+}
