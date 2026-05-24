@@ -67,12 +67,14 @@ serve(async (req) => {
 
     if (!timingSafeEqual(expected, razorpay_signature)) {
       console.warn("Signature mismatch for order", razorpay_order_id);
-      // Mark the order as failed so it isn't left dangling.
+      // Mark the order as failed so it isn't left dangling — but never
+      // overwrite a payment the webhook already confirmed as paid.
       await supabase
         .from("orders")
         .update({ status: "failed", updated_at: new Date().toISOString() })
         .eq("razorpay_order_id", razorpay_order_id)
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .neq("status", "paid");
 
       return jsonResponse({ error: "Signature verification failed" }, 400);
     }
@@ -83,6 +85,7 @@ serve(async (req) => {
       .update({
         razorpay_payment_id,
         razorpay_signature,
+        provider_payment_id: razorpay_payment_id,
         status: "paid",
         paid_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

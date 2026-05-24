@@ -17,6 +17,8 @@ import {
   openRazorpayCheckout,
   type RazorpayHandlerResponse,
 } from "@/lib/razorpay";
+import { openCashfreeCheckout } from "@/lib/cashfree";
+import { ACTIVE_PROVIDER } from "@/lib/payment";
 
 interface PaymentModalProps {
   open: boolean;
@@ -24,7 +26,7 @@ interface PaymentModalProps {
   planId: PlanId | null;
 }
 
-interface CreateOrderResponse {
+interface RazorpayCreateOrderResponse {
   orderId: string;
   amount: number;
   currency: string;
@@ -35,6 +37,13 @@ interface CreateOrderResponse {
   userPhone: string;
 }
 
+interface CashfreeCreateOrderResponse {
+  orderId: string;
+  paymentSessionId: string;
+  mode: "sandbox" | "production";
+  planName: string;
+}
+
 export default function PaymentModal({
   open,
   onClose,
@@ -43,8 +52,92 @@ export default function PaymentModal({
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const plan = planId ? getPlan(planId) : null;
+  const providerName = ACTIVE_PROVIDER === "cashfree" ? "Cashfree" : "Razorpay";
 
   const handlePay = async () => {
+    if (!plan) return;
+    setLoading(true);
+    try {
+      if (ACTIVE_PROVIDER === "cashfree") {
+        await payWithCashfree();
+      } else {
+        await payWithRazorpay();
+      }
+    } catch (err) {
+      toast({
+        title: "Payment error",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // Cashfree (active provider)
+  // ---------------------------------------------------------------
+  const payWithCashfree = async () => {
+    if (!plan) return;
+
+    // 1. Server creates the Cashfree order and persists our DB row.
+    const { data, error } =
+      await supabase.functions.invoke<CashfreeCreateOrderResponse>(
+        "cashfree-create-order",
+        { body: { planId: plan.id } },
+      );
+
+    if (error || !data) {
+      throw new Error(error?.message ?? "Could not start payment");
+    }
+
+    // 2. Open Cashfree Checkout (modal). Resolves when the modal closes.
+    const result = await openCashfreeCheckout(data.paymentSessionId, data.mode);
+
+    if (result.error) {
+      toast({
+        title: "Payment failed",
+        description:
+          result.error.message ?? "Please try again or use a different method.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    // 3. Server confirms payment by querying Cashfree (never trust the client).
+    const { data: verify, error: verifyErr } =
+      await supabase.functions.invoke<{ paid: boolean; status?: string }>(
+        "cashfree-verify-payment",
+        { body: { orderId: data.orderId } },
+      );
+
+    if (verify?.paid) {
+      onClose();
+      navigate(`/payment/success?order=${data.orderId}`);
+      return;
+    }
+
+    // Not paid. If the order is still open (customer closed the checkout
+    // without finishing), let them retry instead of routing to a failure
+    // page. Only genuine terminal failures go to /payment/failure.
+    const terminal = ["EXPIRED", "TERMINATED", "FAILED"];
+    if (!verifyErr && verify?.status && !terminal.includes(verify.status)) {
+      toast({
+        title: "Payment not completed",
+        description: "You can try again whenever you're ready.",
+      });
+      setLoading(false);
+      return;
+    }
+
+    navigate(`/payment/failure?order=${data.orderId}`);
+    setLoading(false);
+  };
+
+  // ---------------------------------------------------------------
+  // Razorpay (kept for fallback; inactive unless VITE_PAYMENT_PROVIDER=razorpay)
+  // ---------------------------------------------------------------
+  const payWithRazorpay = async () => {
     if (!plan) return;
 
     if (!isRazorpayLoaded()) {
@@ -53,23 +146,23 @@ export default function PaymentModal({
         description: "Razorpay couldn't load. Refresh and try again.",
         variant: "destructive",
       });
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    try {
-      // 1. Server creates the Razorpay order and persists our DB row.
-      const { data, error } = await supabase.functions.invoke<CreateOrderResponse>(
+    // 1. Server creates the Razorpay order and persists our DB row.
+    const { data, error } =
+      await supabase.functions.invoke<RazorpayCreateOrderResponse>(
         "razorpay-create-order",
         { body: { planId: plan.id } },
       );
 
-      if (error || !data) {
-        throw new Error(error?.message ?? "Could not start payment");
-      }
+    if (error || !data) {
+      throw new Error(error?.message ?? "Could not start payment");
+    }
 
-      // 2. Open Razorpay Checkout.
-      openRazorpayCheckout(
+    // 2. Open Razorpay Checkout.
+    openRazorpayCheckout(
         {
           key: data.keyId,
           order_id: data.orderId,
@@ -120,14 +213,6 @@ export default function PaymentModal({
           setLoading(false);
         },
       );
-    } catch (err) {
-      toast({
-        title: "Payment error",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
-      });
-      setLoading(false);
-    }
   };
 
   if (!plan) return null;
@@ -165,12 +250,12 @@ export default function PaymentModal({
             Cancel
           </Button>
           <Button variant="gold" onClick={handlePay} disabled={loading}>
-            {loading ? "Opening Razorpay..." : `Pay ₹${plan.priceInr.toLocaleString("en-IN")}`}
+            {loading ? `Opening ${providerName}...` : `Pay ₹${plan.priceInr.toLocaleString("en-IN")}`}
           </Button>
         </DialogFooter>
 
         <p className="text-xs text-muted-foreground text-center">
-          🔒 Secured by Razorpay
+          🔒 Secured by {providerName}
         </p>
       </DialogContent>
     </Dialog>

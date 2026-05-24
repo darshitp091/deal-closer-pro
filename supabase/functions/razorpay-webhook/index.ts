@@ -79,6 +79,7 @@ serve(async (req) => {
           .from("orders")
           .update({
             razorpay_payment_id: p.id,
+            provider_payment_id: p.id,
             status: "paid",
             paid_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -95,6 +96,7 @@ serve(async (req) => {
           .from("orders")
           .update({
             razorpay_payment_id: p.id,
+            provider_payment_id: p.id,
             status: "failed",
             updated_at: new Date().toISOString(),
           })
