@@ -30,7 +30,7 @@ export default function PaymentSuccess() {
       .from("orders")
       .select("id, plan_id, amount_paise, status, created_at")
       .eq("provider_order_id", orderId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         setOrder(data as OrderRow | null);
         setLoading(false);
