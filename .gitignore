@@ -25,3 +25,9 @@ dist-ssr
 
 .env
 .env.*
+# but DO track the secret-free template so setup/deploy docs are shared
+!.env.example
+
+# Keep internal setup/docs out of the repo — only README.md is shared
+*.md
+!README.md

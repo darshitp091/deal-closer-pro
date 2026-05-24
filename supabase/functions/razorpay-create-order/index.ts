@@ -98,6 +98,9 @@ serve(async (req) => {
       amount_paise: amountPaise,
       currency: "INR",
       razorpay_order_id: rzpOrder.id,
+      // Provider-agnostic columns (success page queries these).
+      provider: "razorpay",
+      provider_order_id: rzpOrder.id,
       status: "created",
       notes: { receipt, plan_name: plan.name },
     });

@@ -29,7 +29,7 @@ export default function PaymentSuccess() {
     supabase
       .from("orders")
       .select("id, plan_id, amount_paise, status, created_at")
-      .eq("razorpay_order_id", orderId)
+      .eq("provider_order_id", orderId)
       .single()
       .then(({ data }) => {
         setOrder(data as OrderRow | null);
