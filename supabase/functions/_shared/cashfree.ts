@@ -1,11 +1,10 @@
 // Shared Cashfree Payment Gateway helpers for edge functions.
 //
-// Cashfree API differs from Razorpay in a few important ways:
+// Key Cashfree API conventions:
 //   - amounts are in MAJOR units (rupees, e.g. 2000.00) — NOT paise
-//   - auth is via x-client-id / x-client-secret headers (not Basic auth)
+//   - auth is via x-client-id / x-client-secret headers
 //   - the API version is pinned with the x-api-version header
-//   - the client confirms a payment by fetching order status, not by
-//     verifying an HMAC signature (that's only for webhooks)
+//   - payment confirmation uses order status fetch, not HMAC (HMAC is webhook-only)
 
 const API_VERSION = "2023-08-01";
 

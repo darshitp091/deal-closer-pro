@@ -31,3 +31,9 @@ dist-ssr
 # Keep internal setup/docs out of the repo — only README.md is shared
 *.md
 !README.md
+
+# Supabase temp files (local CLI state, not for repo)
+supabase/.temp/
+
+# Claude Code local settings
+.claude/

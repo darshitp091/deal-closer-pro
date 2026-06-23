@@ -26,15 +26,34 @@ export default function PaymentSuccess() {
       setLoading(false);
       return;
     }
-    supabase
-      .from("orders")
-      .select("id, plan_id, amount_paise, status, created_at")
-      .eq("provider_order_id", orderId)
-      .maybeSingle()
-      .then(({ data }) => {
+
+    const fetchOrder = async () => {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, plan_id, amount_paise, status, created_at")
+        .eq("provider_order_id", orderId)
+        .maybeSingle();
+
+      // Redirect case: user lands here before the webhook fires, so order
+      // status is still "created". Call verify to confirm payment server-side
+      // and flip the status so the page shows accurate data.
+      if (data && data.status !== "paid") {
+        await supabase.functions.invoke("cashfree-verify-payment", {
+          body: { orderId },
+        });
+        const { data: updated } = await supabase
+          .from("orders")
+          .select("id, plan_id, amount_paise, status, created_at")
+          .eq("provider_order_id", orderId)
+          .maybeSingle();
+        setOrder(updated as OrderRow | null);
+      } else {
         setOrder(data as OrderRow | null);
-        setLoading(false);
-      });
+      }
+      setLoading(false);
+    };
+
+    fetchOrder();
   }, [authLoading, user, orderId]);
 
   return (

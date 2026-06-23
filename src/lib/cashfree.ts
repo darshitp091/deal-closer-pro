@@ -1,8 +1,5 @@
 // Thin wrapper around the Cashfree JS SDK (@cashfreepayments/cashfree-js).
-//
-// Unlike Razorpay (loaded via a <script> tag in index.html), Cashfree is
-// an npm package loaded on demand. The SDK is initialised once with the
-// environment mode and reused.
+// The SDK is loaded on demand as an npm package and cached per environment mode.
 
 import { load } from "@cashfreepayments/cashfree-js";
 
@@ -24,13 +21,13 @@ export interface CashfreeCheckoutResult {
   redirect?: boolean;
 }
 
-let cashfreePromise: Promise<CashfreeInstance> | null = null;
+const cashfreeInstances: Partial<Record<CashfreeMode, Promise<CashfreeInstance>>> = {};
 
 async function getCashfree(mode: CashfreeMode): Promise<CashfreeInstance> {
-  if (!cashfreePromise) {
-    cashfreePromise = load({ mode }) as Promise<CashfreeInstance>;
+  if (!cashfreeInstances[mode]) {
+    cashfreeInstances[mode] = load({ mode }) as Promise<CashfreeInstance>;
   }
-  return cashfreePromise;
+  return cashfreeInstances[mode]!;
 }
 
 // Opens the Cashfree checkout in a modal and resolves when it closes.

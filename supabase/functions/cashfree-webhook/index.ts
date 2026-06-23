@@ -25,6 +25,7 @@ interface CashfreeWebhookEvent {
   data: {
     order?: { order_id: string };
     payment?: { cf_payment_id: string | number; payment_status: string };
+    refund?: { refund_status: string };
   };
 }
 
@@ -96,6 +97,21 @@ serve(async (req) => {
           })
           .eq("provider_order_id", orderId)
           .neq("status", "paid"); // never overwrite a successful payment
+        break;
+      }
+
+      case "REFUND_STATUS_WEBHOOK": {
+        // Only mark refunded when Cashfree confirms the refund succeeded.
+        const refundStatus = event.data.refund?.refund_status;
+        if (!orderId || refundStatus !== "SUCCESS") break;
+        await supabase
+          .from("orders")
+          .update({
+            status: "refunded",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("provider_order_id", orderId)
+          .eq("status", "paid"); // only refund rows that were actually paid
         break;
       }
 
