@@ -30,7 +30,17 @@ async function getCashfree(mode: CashfreeMode): Promise<CashfreeInstance> {
   return cashfreeInstances[mode]!;
 }
 
-// Opens the Cashfree checkout in a modal and resolves when it closes.
+// Opens the Cashfree checkout as a full-page redirect to Cashfree's hosted
+// checkout. On success the page navigates away and returns via the order's
+// return_url -> /payment/success (which re-verifies); it only resolves here if
+// the checkout fails to start.
+//
+// We use "_self" rather than the in-page "_modal": the modal loads Cashfree
+// cross-site in an iframe, so browsers (e.g. Firefox) block its third-party
+// cookies (SameSite) and the checkout buttons become unresponsive. A full-page
+// redirect makes Cashfree first-party, so its cookies work and checkout
+// functions normally.
+//
 // `mode` comes from the create-order response so the SDK environment
 // always matches the server's CASHFREE_ENV — nothing to keep in sync.
 export async function openCashfreeCheckout(
@@ -38,5 +48,5 @@ export async function openCashfreeCheckout(
   mode: CashfreeMode,
 ): Promise<CashfreeCheckoutResult> {
   const cashfree = await getCashfree(mode);
-  return cashfree.checkout({ paymentSessionId, redirectTarget: "_modal" });
+  return cashfree.checkout({ paymentSessionId, redirectTarget: "_self" });
 }
