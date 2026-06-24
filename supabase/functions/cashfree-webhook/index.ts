@@ -25,7 +25,7 @@ interface CashfreeWebhookEvent {
   data: {
     order?: { order_id: string };
     payment?: { cf_payment_id: string | number; payment_status: string };
-    refund?: { refund_status: string };
+    refund?: { refund_status: string; order_id?: string };
   };
 }
 
@@ -102,15 +102,19 @@ serve(async (req) => {
 
       case "REFUND_STATUS_WEBHOOK": {
         // Only mark refunded when Cashfree confirms the refund succeeded.
+        // NOTE: in the refund webhook the order id lives under data.refund,
+        // not data.order (that's only populated for PAYMENT_* events), so read
+        // it from refund first and fall back for forward-compatibility.
+        const refundOrderId = event.data.refund?.order_id ?? orderId;
         const refundStatus = event.data.refund?.refund_status;
-        if (!orderId || refundStatus !== "SUCCESS") break;
+        if (!refundOrderId || refundStatus !== "SUCCESS") break;
         await supabase
           .from("orders")
           .update({
             status: "refunded",
             updated_at: new Date().toISOString(),
           })
-          .eq("provider_order_id", orderId)
+          .eq("provider_order_id", refundOrderId)
           .eq("status", "paid"); // only refund rows that were actually paid
         break;
       }
