@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Shield, Lock, FileText } from "lucide-react";
 
 const Footer = () => (
-  <footer className="border-t border-border py-12 bg-card">
+  <footer id="contact" className="border-t border-border py-12 bg-card">
     <div className="container">
       <div className="grid md:grid-cols-3 gap-8 mb-8">
         <div className="space-y-3">
@@ -49,8 +49,6 @@ const Footer = () => (
           <span className="flex items-center gap-1"><Shield size={12} className="text-primary" /> 100% Money-Back Guarantee</span>
           <span>•</span>
           <span>support@ishwarisocials.co</span>
-          <span></span>
-          <span></span>
         </div>
       </div>
     </div>
