@@ -76,7 +76,7 @@ serve(async (req) => {
           .update({ status: "failed", updated_at: new Date().toISOString() })
           .eq("provider_order_id", orderId)
           .eq("user_id", user.id)
-          .neq("status", "paid");
+          .in("status", ["created", "failed"]); // never over paid/refunded
       }
 
       return jsonResponse({ paid: false, status: cfOrder.order_status });
@@ -111,20 +111,26 @@ serve(async (req) => {
     };
     if (paymentId) update.provider_payment_id = paymentId;
 
-    const { data: order, error: updErr } = await supabase
+    // Only advance a still-open order to paid. Never overwrite a row that is
+    // already `paid` (avoids re-stamping paid_at) or — critically — `refunded`:
+    // Cashfree keeps order_status = PAID even after a refund, so re-verifying a
+    // refunded order (e.g. the customer reopens the old success link) must NOT
+    // flip it back to paid.
+    const { error: updErr } = await supabase
       .from("orders")
       .update(update)
       .eq("provider_order_id", orderId)
       .eq("user_id", user.id)
-      .select()
-      .single();
+      .in("status", ["created", "failed"]);
 
-    if (updErr || !order) {
+    if (updErr) {
       console.error("Order update failed:", updErr);
-      return jsonResponse({ error: "Order not found" }, 404);
+      return jsonResponse({ error: "Could not update order" }, 500);
     }
 
-    return jsonResponse({ paid: true, orderId: order.id });
+    // Cashfree confirms payment. If no row matched the guard above it was
+    // already paid or refunded — leave it as-is and still report paid.
+    return jsonResponse({ paid: true, orderId });
   } catch (err) {
     console.error("cashfree verify-payment error:", err);
     return jsonResponse({ error: "Internal error" }, 500);

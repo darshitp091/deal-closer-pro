@@ -71,7 +71,9 @@ serve(async (req) => {
     switch (event.type) {
       case "PAYMENT_SUCCESS_WEBHOOK": {
         if (!orderId) break;
-        // Idempotent — only flips non-paid rows to paid.
+        // Idempotent — only advances a still-open order to paid. Excluding
+        // `refunded` (and `paid`) means a re-delivered success event can never
+        // flip an already-refunded order back to paid.
         await supabase
           .from("orders")
           .update({
@@ -81,7 +83,7 @@ serve(async (req) => {
             updated_at: new Date().toISOString(),
           })
           .eq("provider_order_id", orderId)
-          .neq("status", "paid");
+          .in("status", ["created", "failed"]);
         break;
       }
 
@@ -96,7 +98,7 @@ serve(async (req) => {
             updated_at: new Date().toISOString(),
           })
           .eq("provider_order_id", orderId)
-          .neq("status", "paid"); // never overwrite a successful payment
+          .in("status", ["created", "failed"]); // never over paid/refunded
         break;
       }
 

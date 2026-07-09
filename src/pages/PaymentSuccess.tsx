@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CheckCircle2, XCircle, Clock, Home, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Home, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -16,10 +16,11 @@ interface OrderRow {
 // Cashfree redirects the customer back to the return_url for EVERY outcome —
 // success, failure, and cancellation alike. So this page must verify the real
 // status server-side and render accordingly; it must never assume success.
-type Outcome = "loading" | "paid" | "failed" | "pending" | "unknown";
+type Outcome = "loading" | "paid" | "refunded" | "failed" | "pending" | "unknown";
 
 function outcomeFromStatus(status: string | undefined): Outcome {
   if (status === "paid") return "paid";
+  if (status === "refunded") return "refunded";
   if (status === "failed") return "failed";
   // "created" (Cashfree ACTIVE) means the customer cancelled or didn't finish —
   // no money was taken and they can retry.
@@ -54,7 +55,9 @@ export default function PaymentSuccess() {
       // real status with Cashfree (source of truth) and flip the row, then
       // re-read it so the page reflects the verified outcome.
       let row = data as OrderRow | null;
-      if (row && row.status !== "paid") {
+      // Only re-verify a still-open order. A `paid` or `refunded` row is already
+      // terminal — don't call verify (and never re-touch a refunded order).
+      if (row && (row.status === "created" || row.status === "failed")) {
         await supabase.functions.invoke("cashfree-verify-payment", {
           body: { orderId },
         });
@@ -108,7 +111,7 @@ export default function PaymentSuccess() {
             </p>
           )}
 
-        {outcome === "paid" ? (
+        {outcome === "paid" || outcome === "refunded" ? (
           <Button variant="gold" asChild className="w-full">
             <Link to="/">
               <Home size={16} /> Back to home
@@ -141,6 +144,11 @@ const VIEWS: Record<Outcome, { icon: ReactNode; title: string; body: string }> =
     icon: <CheckCircle2 size={56} className="text-primary mx-auto" />,
     title: "Payment received",
     body: "Thank you. Our team will reach out within 12 hours to start working on your account.",
+  },
+  refunded: {
+    icon: <RotateCcw size={56} className="text-muted-foreground mx-auto" />,
+    title: "Payment refunded",
+    body: "This payment has been refunded. The amount will return to your original payment method per your bank's timeline. Contact support if you have any questions.",
   },
   pending: {
     icon: <Clock size={56} className="text-muted-foreground mx-auto" />,
