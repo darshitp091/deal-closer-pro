@@ -1,63 +1,93 @@
 # Ishwari Socials
 
-Marketing site and checkout for Ishwari Socials — a deal-closing service for physical-goods
-businesses. Visitors pick a plan, sign in, and pay online; paid orders are recorded in
-Supabase and the team follows up.
+This is the website and checkout behind **Ishwari Socials** — a deal-closing service for
+businesses that sell physical goods. The idea is simple: someone visits, picks a plan, signs
+up, and pays online. Paid orders get saved in Supabase and my team takes it from there.
 
-## Tech stack
+Live at **[ishwarisocials.co](https://ishwarisocials.co)**.
 
-- **Vite + React + TypeScript**
-- **Tailwind CSS** + shadcn/ui components
-- **Supabase** — auth, Postgres (`orders`, `profiles`), and Edge Functions
-- **Payments** — Cashfree (default) and Razorpay, switchable via one env var
+## What I built it with
 
-## Getting started
+I tried to keep the stack boring and reliable:
+
+- **Vite + React + TypeScript** — the site itself
+- **Tailwind CSS** + shadcn/ui — the styling and the ready-made components
+- **Supabase** — login, the Postgres database (`orders` and `profiles` tables), and a handful of edge functions
+- **Cashfree** — payments (UPI, cards, netbanking)
+
+The frontend runs on **Vercel** (it rebuilds every time I push to `main`), and Supabase
+handles the database and the secure server-side bits.
+
+## Running it locally
 
 ```bash
 npm install
-cp .env.example .env    # then fill in the values
-npm run dev             # http://localhost:8080
+cp .env.example .env    # then fill in your own values
+npm run dev             # runs on http://localhost:8080
 ```
 
-## Scripts
+## The commands I use
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `npm run dev` | Start the dev server |
-| `npm run build` | Production build to `dist/` |
-| `npm run preview` | Preview the production build |
-| `npm run lint` | Lint the codebase |
-| `npm run test` | Run the test suite |
+| `npm run dev` | Start the local dev server (port 8080) |
+| `npm run build` | Build the production bundle into `dist/` |
+| `npm run preview` | Preview that production build locally |
+| `npm run lint` | Check the code for issues |
+| `npm run test` | Run the tests |
 
 ## Environment variables
 
-See `.env.example` for the full list. The frontend needs the Supabase URL/anon key and the
-active payment provider:
+The frontend only needs two things (there's a template in `.env.example`):
 
 ```env
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
-VITE_PAYMENT_PROVIDER=cashfree   # or: razorpay
 ```
 
-Server-side payment credentials are stored as Supabase Edge Function secrets, never in the
-frontend bundle.
+Anything to do with real money — the Cashfree keys — lives as **Supabase edge-function
+secrets**, never in the frontend and never in this repo:
 
-## Payments
+```bash
+supabase secrets set CASHFREE_APP_ID=...
+supabase secrets set CASHFREE_SECRET_KEY=...
+supabase secrets set CASHFREE_ENV=sandbox      # flip to "production" to go live
+supabase secrets set SITE_URL=https://ishwarisocials.co
+```
 
-The app ships both Cashfree and Razorpay integrations; exactly one is live at a time, chosen
-by `VITE_PAYMENT_PROVIDER`. Each provider has three Edge Functions under
-`supabase/functions/` — `*-create-order`, `*-verify-payment`, and `*-webhook` — and order
-amounts are always derived server-side.
+Switching between test and live mode is just that one `CASHFREE_ENV` value — no code changes.
+
+## How payments work
+
+The one rule I stuck to: never let the browser decide whether a payment succeeded. When
+someone pays —
+
+1. The site asks the server (`cashfree-create-order`) to create the order, and **the price is
+   worked out on the server**, never trusted from the browser.
+2. Cashfree's hosted checkout takes the actual payment.
+3. The server confirms the real status two independent ways — `cashfree-verify-payment` (when
+   the customer lands back on the site) and `cashfree-webhook` (Cashfree notifying us
+   directly). Both are safe to run twice, and a refunded order can never flip back to paid.
+
+Those three functions live under `supabase/functions/`.
 
 ## Project structure
 
 ```
 src/
-  components/    UI + PaymentModal
-  lib/           payment switch, provider SDK wrappers, supabase client, plans
-  pages/         routes incl. payment success/failure
+  components/    the sections of the page + the login and payment popups
+  lib/           supabase client, auth, plans, and the Cashfree wrapper
+  pages/         the routes (landing page, payment success/failure, policy pages)
 supabase/
-  functions/     edge functions (cashfree-* and razorpay-*)
-  migrations/    database schema
+  functions/     the Cashfree edge functions + shared helpers
+  migrations/    how the database is built, step by step
 ```
+
+## The plans
+
+Two of them, both with a full money-back guarantee:
+
+- **Starter — ₹2,000/year** — 1 guaranteed deal
+- **Growth — ₹3,000/year** — 2 guaranteed deals
+
+If we don't deliver, you get your money back. That's the whole promise.
