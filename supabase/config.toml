@@ -1,0 +1,20 @@
+project_id = "lwxkcoanriexohaboivd"
+
+# ----------------------------------------------------------------------
+# Edge function JWT verification.
+#
+# cashfree-create-order and cashfree-verify-payment are called by the
+# browser with a Supabase JWT — verify_jwt = true.
+#
+# cashfree-webhook is called server-to-server by Cashfree (no JWT).
+# Must be false or the gateway rejects every webhook with 401.
+# ----------------------------------------------------------------------
+
+[functions.cashfree-create-order]
+verify_jwt = true
+
+[functions.cashfree-verify-payment]
+verify_jwt = true
+
+[functions.cashfree-webhook]
+verify_jwt = false
