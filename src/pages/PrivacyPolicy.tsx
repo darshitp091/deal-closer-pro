@@ -38,7 +38,7 @@ const PrivacyPolicy = () => (
 
         <section>
           <h2 className="font-display text-xl font-semibold text-foreground mb-3">Payment Information</h2>
-          <p>All payments are processed through our secure payment provider (Cashfree). We <strong className="text-foreground">do not store</strong> your credit card numbers, bank account details, or UPI IDs on our servers. Payment processing is handled entirely by our PCI-DSS compliant payment partner.</p>
+          <p>All payments are processed through our secure payment provider (Razorpay). We <strong className="text-foreground">do not store</strong> your credit card numbers, bank account details, or UPI IDs on our servers. Payment processing is handled entirely by our PCI-DSS compliant payment partner.</p>
         </section>
 
         <section>

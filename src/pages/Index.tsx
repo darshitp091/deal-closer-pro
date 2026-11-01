@@ -68,8 +68,7 @@ export default function Index() {
         {/* Testimonial Section */}
         <Testimonial />
 
-        {/* Pricing Section */}
-        <PricingSection />
+        {user && <PricingSection onBuy={handleBuy} />}
 
         <PolicyHighlights />
       </main>
@@ -86,4 +85,3 @@ export default function Index() {
     </div>
   );
 }
-

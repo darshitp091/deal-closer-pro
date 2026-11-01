@@ -13,16 +13,15 @@ interface OrderRow {
   created_at: string;
 }
 
-// Cashfree redirects the customer back to the return_url for EVERY outcome —
-// success, failure, and cancellation alike. So this page must verify the real
-// status server-side and render accordingly; it must never assume success.
+// The payment page renders the stored server-side order status and never
+// assumes success from a URL alone.
 type Outcome = "loading" | "paid" | "refunded" | "failed" | "pending" | "unknown";
 
 function outcomeFromStatus(status: string | undefined): Outcome {
   if (status === "paid") return "paid";
   if (status === "refunded") return "refunded";
   if (status === "failed") return "failed";
-  // "created" (Cashfree ACTIVE) means the customer cancelled or didn't finish —
+  // "created" means the customer cancelled or didn't finish —
   // no money was taken and they can retry.
   if (status === "created") return "pending";
   return "unknown";
@@ -50,24 +49,7 @@ export default function PaymentSuccess() {
         .eq("provider_order_id", orderId)
         .maybeSingle();
 
-      // Redirect case: the customer usually lands here before the webhook
-      // fires, so the row is still "created". Ask the server to confirm the
-      // real status with Cashfree (source of truth) and flip the row, then
-      // re-read it so the page reflects the verified outcome.
-      let row = data as OrderRow | null;
-      // Only re-verify a still-open order. A `paid` or `refunded` row is already
-      // terminal — don't call verify (and never re-touch a refunded order).
-      if (row && (row.status === "created" || row.status === "failed")) {
-        await supabase.functions.invoke("cashfree-verify-payment", {
-          body: { orderId },
-        });
-        const { data: updated } = await supabase
-          .from("orders")
-          .select(select)
-          .eq("provider_order_id", orderId)
-          .maybeSingle();
-        row = (updated as OrderRow | null) ?? row;
-      }
+      const row = data as OrderRow | null;
 
       setOrder(row);
       setOutcome(row ? outcomeFromStatus(row.status) : "unknown");

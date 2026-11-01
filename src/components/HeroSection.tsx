@@ -1,8 +1,11 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Shield, Zap } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 const HeroSection = () => {
+  const { user, openAuth } = useAuth();
+
   return (
     <section id="home" className="relative min-h-screen flex items-center pt-16 overflow-hidden">
       {/* Ambient glow */}
@@ -46,10 +49,13 @@ const HeroSection = () => {
             transition={{ duration: 0.7, delay: 0.3 }}
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
-            <Button variant="gold" size="lg" className="text-base px-8" asChild>
-              <a href="#pricing">
+            <Button
+              variant="gold"
+              size="lg"
+              className="text-base px-8"
+              onClick={() => (user ? window.location.assign("#pricing") : openAuth())}
+            >
                 Get Your First Deal <ArrowRight size={18} />
-              </a>
             </Button>
             <Button variant="goldOutline" size="lg" className="text-base px-8" asChild>
               <a href="#process">How It Works</a>

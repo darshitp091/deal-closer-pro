@@ -31,7 +31,7 @@ export default function Navbar() {
 
         {/* Desktop */}
         <div className="hidden md:flex items-center gap-8">
-          {links.map((l) => (
+          {links.filter((link) => link.label !== "Pricing" || user).map((l) => (
             <a
               key={l.href}
               href={l.href}
@@ -50,7 +50,17 @@ export default function Navbar() {
             </Button>
           )}
           <Button variant="gold" size="sm" asChild>
-            <a href="#pricing">Get Started</a>
+            <a
+              href={user ? "#pricing" : "#home"}
+              onClick={(event) => {
+                if (!user) {
+                  event.preventDefault();
+                  openAuth();
+                }
+              }}
+            >
+              Get Started
+            </a>
           </Button>
         </div>
 
@@ -67,7 +77,7 @@ export default function Navbar() {
       {/* Mobile menu */}
       {open && (
         <div className="md:hidden bg-background border-b border-border px-6 pb-6 space-y-4">
-          {links.map((l) => (
+          {links.filter((link) => link.label !== "Pricing" || user).map((l) => (
             <a
               key={l.href}
               href={l.href}
@@ -103,7 +113,18 @@ export default function Navbar() {
             </Button>
           )}
           <Button variant="gold" size="sm" className="w-full" asChild>
-            <a href="#pricing">Get Started</a>
+            <a
+              href={user ? "#pricing" : "#home"}
+              onClick={(event) => {
+                if (!user) {
+                  event.preventDefault();
+                  setOpen(false);
+                  openAuth();
+                }
+              }}
+            >
+              Get Started
+            </a>
           </Button>
         </div>
       )}
