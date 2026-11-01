@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, X, LogOut } from "lucide-react";
+import { Menu, X, LogOut, UserCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 const links = [
@@ -31,7 +31,7 @@ export default function Navbar() {
 
         {/* Desktop */}
         <div className="hidden md:flex items-center gap-8">
-          {links.filter((link) => link.label !== "Pricing" || user).map((l) => (
+          {links.map((l) => (
             <a
               key={l.href}
               href={l.href}
@@ -41,9 +41,17 @@ export default function Navbar() {
             </a>
           ))}
           {user ? (
-            <Button variant="goldOutline" size="sm" onClick={() => signOut()}>
-              <LogOut size={14} /> Sign out
-            </Button>
+            <>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground max-w-48">
+                <UserCircle size={18} className="text-primary shrink-0" />
+                <span className="truncate">
+                  {user.user_metadata?.full_name || user.email}
+                </span>
+              </div>
+              <Button variant="goldOutline" size="sm" onClick={() => signOut()}>
+                <LogOut size={14} /> Sign out
+              </Button>
+            </>
           ) : (
             <Button variant="goldOutline" size="sm" onClick={() => openAuth()}>
               Sign in
@@ -51,13 +59,7 @@ export default function Navbar() {
           )}
           <Button variant="gold" size="sm" asChild>
             <a
-              href={user ? "#pricing" : "#home"}
-              onClick={(event) => {
-                if (!user) {
-                  event.preventDefault();
-                  openAuth();
-                }
-              }}
+              href="#pricing"
             >
               Get Started
             </a>
@@ -77,7 +79,7 @@ export default function Navbar() {
       {/* Mobile menu */}
       {open && (
         <div className="md:hidden bg-background border-b border-border px-6 pb-6 space-y-4">
-          {links.filter((link) => link.label !== "Pricing" || user).map((l) => (
+          {links.map((l) => (
             <a
               key={l.href}
               href={l.href}
@@ -88,17 +90,25 @@ export default function Navbar() {
             </a>
           ))}
           {user ? (
-            <Button
-              variant="goldOutline"
-              size="sm"
-              className="w-full"
-              onClick={() => {
-                setOpen(false);
-                signOut();
-              }}
-            >
-              <LogOut size={14} /> Sign out
-            </Button>
+            <>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <UserCircle size={18} className="text-primary" />
+                <span className="truncate">
+                  {user.user_metadata?.full_name || user.email}
+                </span>
+              </div>
+              <Button
+                variant="goldOutline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setOpen(false);
+                  signOut();
+                }}
+              >
+                <LogOut size={14} /> Sign out
+              </Button>
+            </>
           ) : (
             <Button
               variant="goldOutline"
@@ -114,14 +124,8 @@ export default function Navbar() {
           )}
           <Button variant="gold" size="sm" className="w-full" asChild>
             <a
-              href={user ? "#pricing" : "#home"}
-              onClick={(event) => {
-                if (!user) {
-                  event.preventDefault();
-                  setOpen(false);
-                  openAuth();
-                }
-              }}
+              href="#pricing"
+              onClick={() => setOpen(false)}
             >
               Get Started
             </a>

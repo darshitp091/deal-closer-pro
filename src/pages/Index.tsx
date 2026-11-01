@@ -68,7 +68,7 @@ export default function Index() {
         {/* Testimonial Section */}
         <Testimonial />
 
-        {user && <PricingSection onBuy={handleBuy} />}
+        <PricingSection onBuy={handleBuy} />
 
         <PolicyHighlights />
       </main>
