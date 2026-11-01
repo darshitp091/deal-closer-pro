@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { getPlan, type PlanId } from "@/lib/plans";
-import { openRazorpayCheckout } from "@/lib/razorpay";
 import { useAuth } from "@/lib/auth";
 
 interface PaymentModalProps {
@@ -23,10 +21,7 @@ interface PaymentModalProps {
 
 interface RazorpayCreateOrderResponse {
   orderId: string;
-  keyId: string;
-  amountPaise: number;
-  planName: string;
-  callbackUrl: string;
+  paymentLinkUrl: string;
 }
 
 export default function PaymentModal({
@@ -35,7 +30,6 @@ export default function PaymentModal({
   planId,
 }: PaymentModalProps) {
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
   const { user } = useAuth();
   const plan = planId ? getPlan(planId) : null;
 
@@ -68,63 +62,8 @@ export default function PaymentModal({
       throw new Error(error?.message ?? "Could not start payment");
     }
 
-    // 2. Open Razorpay Checkout. The signature is verified by our server.
-    const result = await openRazorpayCheckout({
-      keyId: data.keyId,
-      orderId: data.orderId,
-      amountPaise: data.amountPaise,
-      planName: data.planName,
-      callbackUrl: data.callbackUrl,
-      customerName: user?.user_metadata?.full_name,
-      customerEmail: user?.email,
-      customerPhone: user?.user_metadata?.phone,
-    });
-
-    if ("error" in result) {
-      toast({
-        title: "Payment failed",
-        description: result.error,
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
-    }
-
-    // 3. Server confirms the Razorpay signature and captured payment.
-    const { data: verify, error: verifyErr } =
-      await supabase.functions.invoke<{ paid: boolean; status?: string }>(
-        "razorpay-verify-payment",
-        {
-          body: {
-            orderId: data.orderId,
-            paymentId: result.response.razorpay_payment_id,
-            signature: result.response.razorpay_signature,
-          },
-        },
-      );
-
-    if (verify?.paid) {
-      onClose();
-      navigate(`/payment/success?order=${data.orderId}`);
-      return;
-    }
-
-    // Network/server error during verify — payment may have gone through.
-    // The webhook will update the order. Don't navigate to failure.
-    if (verifyErr) {
-      toast({
-        title: "Could not confirm payment",
-        description:
-          "If money was deducted, it will be reflected shortly. Contact support with reference: " +
-          data.orderId,
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
-    }
-
-    navigate(`/payment/failure?order=${data.orderId}`);
-    setLoading(false);
+    onClose();
+    window.location.assign(data.paymentLinkUrl);
   };
 
   if (!plan) return null;

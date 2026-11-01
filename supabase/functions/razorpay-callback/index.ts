@@ -4,10 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendPaymentEmails } from "../_shared/payment-email.ts";
 import {
   razorpayBaseUrl,
-  razorpayCredentials,
   razorpayHeaders,
-  razorpaySignature,
-  signaturesMatch,
 } from "../_shared/razorpay.ts";
 
 function redirect(siteUrl: string, path: string, orderId?: string): Response {
@@ -21,21 +18,14 @@ serve(async (req) => {
   if (!siteUrl) return new Response("Site URL is not configured", { status: 500 });
 
   try {
-    if (req.method !== "POST") return redirect(siteUrl, "/payment/failure");
+    if (req.method !== "GET") return redirect(siteUrl, "/payment/failure");
 
-    const form = await req.formData();
-    const orderId = String(form.get("razorpay_order_id") ?? "");
-    const paymentId = String(form.get("razorpay_payment_id") ?? "");
-    const signature = String(form.get("razorpay_signature") ?? "");
-    if (!orderId || !paymentId || !signature) {
-      return redirect(siteUrl, "/payment/failure", orderId);
-    }
-
-    const { secret } = razorpayCredentials();
-    const expected = razorpaySignature(`${orderId}|${paymentId}`, secret);
-    if (!signaturesMatch(expected, signature)) {
-      console.warn("Razorpay callback signature mismatch");
-      return redirect(siteUrl, "/payment/failure", orderId);
+    const url = new URL(req.url);
+    const paymentLinkId = url.searchParams.get("razorpay_payment_link_id");
+    const referenceId = url.searchParams.get("razorpay_payment_link_reference_id") ??
+      url.searchParams.get("reference_id");
+    if (!paymentLinkId || !referenceId) {
+      return redirect(siteUrl, "/payment/failure");
     }
 
     const supabase = createClient(
@@ -44,50 +34,54 @@ serve(async (req) => {
     );
     const { data: order, error: orderErr } = await supabase
       .from("orders")
-      .select("user_id, plan_id, amount_paise, currency, status")
-      .eq("provider_order_id", orderId)
+      .select("user_id, provider_order_id, plan_id, amount_paise, currency, status, notes")
+      .eq("provider_order_id", paymentLinkId)
+      .eq("notes->>reference_id", referenceId)
       .maybeSingle();
-    if (orderErr || !order) return redirect(siteUrl, "/payment/failure", orderId);
+    if (orderErr || !order) return redirect(siteUrl, "/payment/failure");
 
-    const paymentResponse = await fetch(`${razorpayBaseUrl}/payments/${paymentId}`, {
-      headers: razorpayHeaders(),
-    });
-    if (!paymentResponse.ok) {
-      console.error("Razorpay callback payment fetch failed:", paymentResponse.status);
-      return redirect(siteUrl, "/payment/failure", orderId);
+    const paymentLinkResponse = await fetch(
+      `${razorpayBaseUrl}/payment_links/${encodeURIComponent(paymentLinkId)}`,
+      { headers: razorpayHeaders() },
+    );
+    if (!paymentLinkResponse.ok) {
+      console.error("Razorpay payment link fetch failed:", paymentLinkResponse.status);
+      return redirect(siteUrl, "/payment/failure", paymentLinkId);
     }
 
-    const payment = await paymentResponse.json() as {
-      order_id?: string;
+    const paymentLink = await paymentLinkResponse.json() as {
+      id?: string;
       amount?: number;
       currency?: string;
       status?: string;
+      payments?: { items?: Array<{ id?: string; status?: string }> };
     };
+    const payment = paymentLink.payments?.items?.find((item) => item.status === "captured");
     if (
-      payment.order_id !== orderId ||
-      payment.amount !== order.amount_paise ||
-      payment.currency !== order.currency ||
-      payment.status !== "captured"
+      paymentLink.id !== paymentLinkId ||
+      paymentLink.amount !== order.amount_paise ||
+      paymentLink.currency !== order.currency ||
+      paymentLink.status !== "paid" ||
+      !payment?.id
     ) {
-      return redirect(siteUrl, "/payment/failure", orderId);
+      return redirect(siteUrl, "/payment/failure", paymentLinkId);
     }
 
     const now = new Date().toISOString();
     const { data: paidOrder, error: updateErr } = await supabase
       .from("orders")
       .update({
-        provider_payment_id: paymentId,
+        provider_payment_id: payment.id,
         status: "paid",
         paid_at: now,
         updated_at: now,
       })
-      .eq("provider_order_id", orderId)
+      .eq("provider_order_id", paymentLinkId)
       .in("status", ["created", "failed"])
       .select("user_id, plan_id, amount_paise")
       .maybeSingle();
-
     if (updateErr) {
-      console.error("Razorpay callback order update failed:", updateErr);
+      console.error("Payment link order update failed:", updateErr);
       return new Response("Could not update order", { status: 500 });
     }
 
@@ -102,8 +96,8 @@ serve(async (req) => {
             customerPhone: (user.user_metadata?.phone as string | undefined) ?? "",
             planName: paidOrder.plan_id,
             amountInr: paidOrder.amount_paise / 100,
-            orderId,
-            paymentId,
+            orderId: paymentLinkId,
+            paymentId: payment.id,
           });
         } catch (emailError) {
           console.error("Payment email notification failed:", emailError);
@@ -111,9 +105,9 @@ serve(async (req) => {
       }
     }
 
-    return redirect(siteUrl, "/payment/success", orderId);
+    return redirect(siteUrl, "/payment/success", paymentLinkId);
   } catch (error) {
-    console.error("razorpay callback error:", error);
+    console.error("razorpay payment link callback error:", error);
     return redirect(siteUrl, "/payment/failure");
   }
 });

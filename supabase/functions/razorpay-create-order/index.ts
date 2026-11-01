@@ -35,20 +35,33 @@ serve(async (req) => {
     const plan = getServerPlan(planId);
     if (!plan) return jsonResponse({ error: "Unknown plan" }, 400);
 
-    const { keyId } = razorpayCredentials();
+    const { keyId, secret } = razorpayCredentials();
     const callbackBaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
     if (!callbackBaseUrl) {
       return jsonResponse({ error: "Supabase URL is not configured" }, 500);
     }
     const amountPaise = plan.priceInr * 100;
-    const razorpayResponse = await fetch(`${razorpayBaseUrl}/orders`, {
+    const referenceId = `ishwari_${user.id.slice(0, 8)}_${Date.now()}`;
+    const razorpayResponse = await fetch(`${razorpayBaseUrl}/payment_links`, {
       method: "POST",
-      headers: razorpayHeaders(),
+      headers: {
+        ...razorpayHeaders(),
+        Authorization: `Basic ${btoa(`${keyId}:${secret}`)}`,
+      },
       body: JSON.stringify({
         amount: amountPaise,
         currency: "INR",
-        receipt: `ishwari_${user.id.slice(0, 8)}_${Date.now()}`,
-        notes: { user_id: user.id, plan_id: plan.id },
+        reference_id: referenceId,
+        description: `${plan.name} plan`,
+        customer: {
+          name: (user.user_metadata?.full_name as string | undefined) ?? "Customer",
+          email: user.email ?? "",
+          contact: (user.user_metadata?.phone as string | undefined) ?? "",
+        },
+        notify: { email: false, sms: false },
+        reminder_enable: false,
+        callback_url: `${callbackBaseUrl}/functions/v1/razorpay-callback?reference_id=${encodeURIComponent(referenceId)}`,
+        callback_method: "get",
       }),
     });
 
@@ -57,9 +70,13 @@ serve(async (req) => {
       return jsonResponse({ error: "Failed to create payment order" }, 502);
     }
 
-    const order = await razorpayResponse.json() as { id?: string; amount?: number };
-    if (!order.id || order.amount !== amountPaise) {
-      console.error("Invalid Razorpay order response:", order);
+    const paymentLink = await razorpayResponse.json() as {
+      id?: string;
+      amount?: number;
+      short_url?: string;
+    };
+    if (!paymentLink.id || paymentLink.amount !== amountPaise || !paymentLink.short_url) {
+      console.error("Invalid Razorpay payment link response:", paymentLink);
       return jsonResponse({ error: "Failed to start payment" }, 502);
     }
 
@@ -69,9 +86,9 @@ serve(async (req) => {
       amount_paise: amountPaise,
       currency: "INR",
       provider: "razorpay",
-      provider_order_id: order.id,
+      provider_order_id: paymentLink.id,
       status: "created",
-      notes: { plan_name: plan.name },
+      notes: { plan_name: plan.name, reference_id: referenceId },
     });
     if (insertErr) {
       console.error("DB insert failed:", insertErr);
@@ -79,11 +96,8 @@ serve(async (req) => {
     }
 
     return jsonResponse({
-      orderId: order.id,
-      keyId,
-      amountPaise,
-      planName: plan.name,
-      callbackUrl: `${callbackBaseUrl}/functions/v1/razorpay-callback`,
+      orderId: paymentLink.id,
+      paymentLinkUrl: paymentLink.short_url,
     });
   } catch (err) {
     console.error("razorpay create-order error:", err);
