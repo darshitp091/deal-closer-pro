@@ -36,6 +36,10 @@ serve(async (req) => {
     if (!plan) return jsonResponse({ error: "Unknown plan" }, 400);
 
     const { keyId } = razorpayCredentials();
+    const callbackBaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
+    if (!callbackBaseUrl) {
+      return jsonResponse({ error: "Supabase URL is not configured" }, 500);
+    }
     const amountPaise = plan.priceInr * 100;
     const razorpayResponse = await fetch(`${razorpayBaseUrl}/orders`, {
       method: "POST",
@@ -79,6 +83,7 @@ serve(async (req) => {
       keyId,
       amountPaise,
       planName: plan.name,
+      callbackUrl: `${callbackBaseUrl}/functions/v1/razorpay-callback`,
     });
   } catch (err) {
     console.error("razorpay create-order error:", err);

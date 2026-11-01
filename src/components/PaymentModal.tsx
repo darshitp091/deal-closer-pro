@@ -26,6 +26,7 @@ interface RazorpayCreateOrderResponse {
   keyId: string;
   amountPaise: number;
   planName: string;
+  callbackUrl: string;
 }
 
 export default function PaymentModal({
@@ -73,6 +74,7 @@ export default function PaymentModal({
       orderId: data.orderId,
       amountPaise: data.amountPaise,
       planName: data.planName,
+      callbackUrl: data.callbackUrl,
       customerName: user?.user_metadata?.full_name,
       customerEmail: user?.email,
       customerPhone: user?.user_metadata?.phone,

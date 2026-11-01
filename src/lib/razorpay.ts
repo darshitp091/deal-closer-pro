@@ -47,6 +47,7 @@ export async function openRazorpayCheckout(options: {
   orderId: string;
   amountPaise: number;
   planName: string;
+  callbackUrl: string;
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
@@ -73,15 +74,14 @@ export async function openRazorpayCheckout(options: {
       name: "Ishwari Socials",
       description: `${options.planName} plan`,
       order_id: options.orderId,
+      callback_url: options.callbackUrl,
+      redirect: true,
       prefill: {
         name: options.customerName,
         email: options.customerEmail,
         contact: options.customerPhone,
       },
       theme: { color: "#d4a72c" },
-      modal: {
-        ondismiss: () => finish({ error: "Payment window closed" }),
-      },
       handler: (response: RazorpayCheckoutResponse) => finish({ response }),
     });
 
