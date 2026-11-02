@@ -12,6 +12,26 @@ import { useAuth } from "@/lib/auth";
 
 type Mode = "login" | "signup";
 
+const AUTH_REQUEST_TIMEOUT_MS = 15_000;
+
+async function withAuthTimeout<T>(request: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      request,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("Authentication is taking too long. Please try again.")),
+          AUTH_REQUEST_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export default function AuthModal() {
   const { isAuthOpen, closeAuth } = useAuth();
   const [mode, setMode] = useState<Mode>("login");
@@ -43,39 +63,28 @@ export default function AuthModal() {
       return;
     }
 
-    setLoading(true);
     try {
+      setLoading(true);
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { full_name: name, phone } },
-        });
-        if (error) throw error;
-
-        // Some Supabase setups require email confirmation; in that case
-        // there's no session yet. Try a direct sign-in for the no-confirm flow.
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
-          const { error: loginErr } = await supabase.auth.signInWithPassword({
+        const { data, error } = await withAuthTimeout(
+          supabase.auth.signUp({
             email,
             password,
-          });
-          if (loginErr) {
-            // Email confirmation is required — show the in-modal confirmation
-            // screen instead of leaving an empty form behind.
-            setAwaitingConfirm(email);
-            reset();
-            setLoading(false);
-            return;
-          }
+            options: { data: { full_name: name, phone } },
+          }),
+        );
+        if (error) throw error;
+
+        if (!data.session) {
+          setAwaitingConfirm(email);
+          reset();
+          return;
         }
         toast({ title: "Account created!" });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error } = await withAuthTimeout(
+          supabase.auth.signInWithPassword({ email, password }),
+        );
         if (error) throw error;
         toast({ title: "Welcome back!" });
       }
@@ -89,22 +98,28 @@ export default function AuthModal() {
         description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleGoogle = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) {
+    try {
+      const { error } = await withAuthTimeout(
+        supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: window.location.origin },
+        }),
+      );
+      if (error) throw error;
+    } catch (err) {
       toast({
         title: "Google login failed",
-        description: error.message,
+        description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
+    } finally {
       setLoading(false);
     }
     // On success, browser redirects → page reload → AuthProvider picks up session.
